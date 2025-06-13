@@ -1,4 +1,4 @@
-"""`one_row_keyboard/ 内で、`python -m egs.pred_all_e``"""
+"""one_row_keyboard/ 内で、`python -m egs.pred_all_e`"""
 
 from pathlib import Path
 
