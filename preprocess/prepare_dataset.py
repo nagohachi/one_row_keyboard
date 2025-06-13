@@ -17,12 +17,9 @@ def prepare_dataset() -> None:
     train_data_count = 530809
     valid_data_count = 20000
 
-    train_char_set = set()
-
     for data in tqdm(ds["train"], total=train_data_count):
         train_data_dict["id"].append(data["id"])
         train_data_dict["text"].append(data["abstract"])
-        train_char_set |= set(list(data["abstract"]))
 
     for data in tqdm(ds["validation"], total=valid_data_count):
         valid_data_dict["id"].append(data["id"])
