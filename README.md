@@ -79,6 +79,17 @@ $ python preprocess/prepare_dataset.py
     test_df["text"] = test_df["tokenized_text"].apply(inference)
     test_df = test_df.drop("tokenized_text", axis="columns")
 
+    print(test_df.head())
+    # すべてを "e" と予測した場合
+    """
+                id                                               text
+    0  44rSAMr  e eeeeeeee eeeeee eee ee e eeeee e ee e eee e ...
+    1  3MycQtg  eeee eeeeeee eeeeeeee eeeeeeeeee ee eeeeeee ee...
+    2  4qxXN8m  eeeeeeeeee eeeeeeeeeeeeeeeeee eeeeeeeeeee eeee...
+    3  3HdhbZQ  ee eeee eeeeee ee eeeeeeee ee eeeeeeee eeeeeee...
+    4  bUxKnm7  ee eeee eeeeeeeee e eee eeee ee eeeeeeeeeeeee ...
+    """
+
     test_df.to_csv("submission.tsv", sep="\t")
    ```
 3. 推論結果に対する accuracy を取得する
