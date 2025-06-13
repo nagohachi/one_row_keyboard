@@ -1,3 +1,5 @@
+"""`one_row_keyboard/ 内で、`python -m egs.pred_greedy``"""
+
 from pathlib import Path
 
 import pandas as pd

@@ -1,3 +1,5 @@
+"""`one_row_keyboard/ 内で、`python -m egs.pred_all_e``"""
+
 from pathlib import Path
 
 import pandas as pd
@@ -42,12 +44,6 @@ test_tsv_path = get_test_tsv_path(
 )
 
 test_df = pd.read_csv(test_tsv_path, sep="\t")
-token_to_char_mapping = dict()
-
-for char, token in char_to_token_mapping.items():
-    if str(token) in token_to_char_mapping:
-        continue
-    token_to_char_mapping[str(token)] = char
 
 
 def inference(tokenized_text: str) -> str:
