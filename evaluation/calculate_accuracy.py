@@ -3,7 +3,7 @@ from pathlib import Path
 
 import pandas as pd
 from datasets import load_dataset
-from datasets.dataset_dict import IterableDatasetDict
+from datasets.dataset_dict import DatasetDict
 from tqdm.auto import tqdm
 
 
@@ -22,12 +22,12 @@ def calculate_accuracy(submission_tsv_path: Path | str) -> float:
     test_data_count = 20000
     test_data_dict = {"id": [], "text": []}
 
-    ds = load_dataset("taln-ls2n/kp20k", trust_remote_code=True, streaming=True)
-    assert isinstance(ds, IterableDatasetDict)
+    ds = load_dataset("taln-ls2n/kp20k", trust_remote_code=True)
+    assert isinstance(ds, DatasetDict)
 
     for data in tqdm(ds["test"], total=test_data_count, desc="Loading test data..."):
-        test_data_dict["id"].append(data["id"])
-        test_data_dict["text"].append(data["abstract"])
+        test_data_dict["id"].append(data["id"])  # type: ignore
+        test_data_dict["text"].append(data["abstract"])  # type: ignore
 
     test_df = pd.DataFrame(test_data_dict).sort_values(by="id")
 

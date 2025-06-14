@@ -58,17 +58,11 @@
 $ uv sync
 ```
 
-### Dataset
-
-```console
-$ python preprocess/prepare_dataset.py
-```
-
 ## Evaluation
 
 1. テストデータセットの TSV を取得する
     ```python
-    from evaluation.utils import get_test_tsv_path
+    from evaluation.utils import get_test_tsv_path, get_train_valid_tsv_path
 
     char_to_token_mapping = {
             "a": 0,
@@ -102,10 +96,16 @@ $ python preprocess/prepare_dataset.py
     # char_to_token_mapping の value は 0, 1, ..., 9 のいずれかである必要がある
     # unk_token_id は char_to_token_mapping の key にない文字がテストデータに存在したときに与えるトークンで、
     # 0, 1, ..., 9 のいずれかである必要がある
+    train_tsv_path, valid_tsv_path = get_train_valid_tsv_path(
+        char_to_token_mapping=char_to_token_mapping, unk_token_id=0
+    )
+
     test_tsv_path = get_test_tsv_path(
         char_to_token_mapping=char_to_token_mapping, unk_token_id=0
     )
 
+    # train_df = pd.read_csv(train_tsv_path, sep="\t")
+    # valid_df = pd.read_csv(valid_tsv_path, sep="\t")
     test_df = pd.read_csv(test_tsv_path, sep="\t")
 
     print(test_df.head())

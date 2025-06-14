@@ -2,8 +2,7 @@ from pathlib import Path
 
 import pandas as pd
 from datasets import load_dataset
-from datasets.dataset_dict import IterableDatasetDict
-from tqdm.auto import tqdm
+from datasets.dataset_dict import DatasetDict
 
 from constants.paths import INPUT_DIR
 
@@ -25,6 +24,57 @@ def tokenize(
     return tokenized_text
 
 
+def batch_tokenize(
+    texts: list[str], char_to_token_mapping: dict[str, int], unk_token_id: int
+) -> list[str]:
+    return [tokenize(text, char_to_token_mapping, unk_token_id) for text in texts]
+
+
+def get_train_valid_tsv_path(
+    char_to_token_mapping: dict[str, int],
+    unk_token_id: int,
+) -> tuple[Path, Path]:
+    assert " " not in char_to_token_mapping, (
+        "半角スペースはトークン化する必要はありません"
+    )
+    assert set(char_to_token_mapping.values()) <= token_id_set, (
+        f"char_to_token_mapping は str -> {token_id_set} である必要があります"
+    )
+    assert unk_token_id in token_id_set, (
+        f"unk_token_id は {token_id_set} の要素である必要があります"
+    )
+
+    ds = load_dataset("taln-ls2n/kp20k", trust_remote_code=True)
+    assert isinstance(ds, DatasetDict)
+
+    train_dataset = ds["train"].map(
+        lambda batch: {
+            "tokenized_text": batch_tokenize(
+                batch["abstract"], char_to_token_mapping, unk_token_id
+            )
+        },
+        batched=True,
+    )
+
+    valid_dataset = ds["validation"].map(
+        lambda batch: {
+            "tokenized_text": batch_tokenize(
+                batch["abstract"], char_to_token_mapping, unk_token_id
+            )
+        },
+        remove_columns="abstract",
+        batched=True,
+    )
+
+    train_tsv_path = INPUT_DIR / "train.tsv"
+    valid_tsv_path = INPUT_DIR / "valid.tsv"
+
+    train_dataset.to_pandas().to_csv(train_tsv_path, sep="\t", index=False)  # type: ignore
+    valid_dataset.to_pandas().to_csv(valid_tsv_path, sep="\t", index=False)  # type: ignore
+
+    return train_tsv_path, valid_tsv_path
+
+
 def get_test_tsv_path(
     char_to_token_mapping: dict[str, int],
     unk_token_id: int,
@@ -39,21 +89,24 @@ def get_test_tsv_path(
         f"unk_token_id は {token_id_set} の要素である必要があります"
     )
 
-    ds = load_dataset("taln-ls2n/kp20k", trust_remote_code=True, streaming=True)
-    assert isinstance(ds, IterableDatasetDict)
+    ds = load_dataset("taln-ls2n/kp20k", trust_remote_code=True)
+    assert isinstance(ds, DatasetDict)
 
-    test_data_count = 20000
-    test_data_dict = {"id": [], "tokenized_text": []}
+    test_dataset = ds["test"].map(
+        lambda batch: {
+            "tokenized_text": batch_tokenize(
+                batch["abstract"], char_to_token_mapping, unk_token_id
+            )
+        },
+        remove_columns="abstract",
+        batched=True,
+    )
 
-    for data in tqdm(ds["test"], total=test_data_count, desc="Loading test data..."):
-        test_data_dict["id"].append(data["id"])
-        test_data_dict["tokenized_text"].append(
-            tokenize(data["abstract"], char_to_token_mapping, unk_token_id)
-        )
+    test_tsv_path = INPUT_DIR / "test.tsv"
 
-    output_path = INPUT_DIR / "test.tsv"
-    pd.DataFrame(test_data_dict).to_csv(output_path, sep="\t", index=False)
-    return output_path
+    test_dataset.to_pandas().to_csv(test_tsv_path, sep="\t", index=False)  # type: ignore
+
+    return test_tsv_path
 
 
 if __name__ == "__main__":
