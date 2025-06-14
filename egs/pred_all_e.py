@@ -48,9 +48,10 @@ test_df = pd.read_csv(test_tsv_path, sep="\t")
 
 def inference(tokenized_text: str) -> str:
     """半角スペース以外のすべてを 'e' で復元する"""
-    for token in range(0, 10):
-        tokenized_text = tokenized_text.replace(str(token), "e")
-    return tokenized_text
+    result = ""
+    for token in tokenized_text:
+        result += " " if token == " " else "e"
+    return result
 
 
 test_df["text"] = test_df["tokenized_text"].apply(inference)

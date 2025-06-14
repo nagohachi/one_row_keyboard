@@ -56,10 +56,7 @@ def inference(tokenized_text: str) -> str:
     """char_to_token_mapping に含まれている最初の文字で復元する"""
     result = ""
     for token in tokenized_text:
-        if token == " ":
-            result += " "
-        else:
-            result += token_to_char_mapping[token]
+        result += token_to_char_mapping.get(token, " ")
 
     return result
 
