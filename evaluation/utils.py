@@ -1,3 +1,4 @@
+from functools import partial
 from pathlib import Path
 
 import pandas as pd
@@ -25,9 +26,16 @@ def tokenize(
 
 
 def batch_tokenize(
-    texts: list[str], char_to_token_mapping: dict[str, int], unk_token_id: int
-) -> list[str]:
-    return [tokenize(text, char_to_token_mapping, unk_token_id) for text in texts]
+    examples: dict, char_to_token_mapping: dict[str, int], unk_token_id: int
+) -> dict:
+    text_list = examples["abstract"]
+
+    return {
+        "text": text_list,
+        "tokenized_text": [
+            tokenize(text, char_to_token_mapping, unk_token_id) for text in text_list
+        ],
+    }
 
 
 def get_train_valid_tsv_path(
@@ -48,21 +56,22 @@ def get_train_valid_tsv_path(
     assert isinstance(ds, DatasetDict)
 
     train_dataset = ds["train"].map(
-        lambda batch: {
-            "tokenized_text": batch_tokenize(
-                batch["abstract"], char_to_token_mapping, unk_token_id
-            )
-        },
+        partial(
+            batch_tokenize,
+            char_to_token_mapping=char_to_token_mapping,
+            unk_token_id=unk_token_id,
+        ),
+        remove_columns=["title", "abstract", "keyphrases", "prmu"],
         batched=True,
     )
 
     valid_dataset = ds["validation"].map(
-        lambda batch: {
-            "tokenized_text": batch_tokenize(
-                batch["abstract"], char_to_token_mapping, unk_token_id
-            )
-        },
-        remove_columns="abstract",
+        partial(
+            batch_tokenize,
+            char_to_token_mapping=char_to_token_mapping,
+            unk_token_id=unk_token_id,
+        ),
+        remove_columns=["title", "abstract", "keyphrases", "prmu"],
         batched=True,
     )
 
@@ -93,18 +102,20 @@ def get_test_tsv_path(
     assert isinstance(ds, DatasetDict)
 
     test_dataset = ds["test"].map(
-        lambda batch: {
-            "tokenized_text": batch_tokenize(
-                batch["abstract"], char_to_token_mapping, unk_token_id
-            )
-        },
-        remove_columns="abstract",
+        partial(
+            batch_tokenize,
+            char_to_token_mapping=char_to_token_mapping,
+            unk_token_id=unk_token_id,
+        ),
+        remove_columns=["title", "abstract", "keyphrases", "prmu"],
         batched=True,
     )
 
     test_tsv_path = INPUT_DIR / "test.tsv"
 
-    test_dataset.to_pandas().to_csv(test_tsv_path, sep="\t", index=False)  # type: ignore
+    test_dataset.to_pandas().drop(columns="text").to_csv(  # type: ignore
+        test_tsv_path, sep="\t", index=False
+    )
 
     return test_tsv_path
 
@@ -138,6 +149,10 @@ if __name__ == "__main__":
         "y": 4,
         "z": 5,
     }
+
+    train_tsv_path, valid_tsv_path = get_train_valid_tsv_path(
+        char_to_token_mapping=char_to_token_mapping, unk_token_id=0
+    )
 
     test_tsv_path = get_test_tsv_path(
         char_to_token_mapping=char_to_token_mapping, unk_token_id=0
