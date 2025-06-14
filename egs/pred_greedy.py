@@ -5,7 +5,7 @@ from pathlib import Path
 import pandas as pd
 
 from evaluation.calculate_accuracy import calculate_accuracy
-from evaluation.utils import get_test_tsv_path
+from evaluation.utils import get_test_tsv_path  # , get_train_valid_tsv_path
 
 char_to_token_mapping = {
     "a": 0,
@@ -39,6 +39,11 @@ char_to_token_mapping = {
 # char_to_token_mapping の value は 0, 1, ..., 9 のいずれかである必要がある
 # unk_token_id は char_to_token_mapping の key にない文字がテストデータに存在したときに与えるトークンで、
 # 0, 1, ..., 9 のいずれかである必要がある
+
+# train_tsv_path, valid_tsv_path = get_train_valid_tsv_path(
+#     char_to_token_mapping=char_to_token_mapping, unk_token_id=0
+# )
+
 test_tsv_path = get_test_tsv_path(
     char_to_token_mapping=char_to_token_mapping, unk_token_id=0
 )
