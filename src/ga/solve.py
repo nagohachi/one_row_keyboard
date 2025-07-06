@@ -2,6 +2,8 @@ import re
 import random
 from collections import defaultdict
 from typing import List
+import json
+import traceback
 
 import pandas as pd
 from tqdm.auto import tqdm
@@ -179,16 +181,28 @@ class UnigramWithGASolver:
             # 適応度を計算
             print("Calculating fitness for all individuals...")
             fitness_scores = []
-            for i, individual in enumerate(population):
-                print(f"  Individual {i + 1}: ", end="")
+            for i, individual in enumerate(
+                tqdm(population, desc=f"Fitness (Gen {generation + 1})")
+            ):
                 fitness = self._calculate_fitness(individual)
                 fitness_scores.append(fitness)
-                print(f"Fitness = {fitness}")
-
                 if fitness < best_fitness:
                     best_fitness = fitness
                     best_mapping = individual.copy()
                     print(f"    -> New best! Fitness improved to {best_fitness}")
+
+            # 各世代ごとにfitnessが良い個体を上位3つjson保存
+            top3_indices = sorted(
+                range(len(fitness_scores)), key=lambda i: fitness_scores[i]
+            )[:3]
+            for rank, idx in enumerate(top3_indices):
+                best_individual = population[idx]
+                fitness = fitness_scores[idx]
+                with open(
+                    f"best_mapping_gen{generation + 1}_rank{rank + 1}_fitness{fitness}.json",
+                    "w",
+                ) as f:
+                    json.dump(best_individual, f, ensure_ascii=False, indent=2)
 
             print(f"Generation {generation + 1} summary:")
             print(f"  Best fitness: {best_fitness}")
@@ -235,9 +249,14 @@ class UnigramWithGASolver:
         print("  Adding initial mapping as first individual")
         population.append(self.initial_char_to_token_mapping.copy())
 
+        # 初期解を突然変異させた個体を2つ目に追加
+        print("  Adding mutated initial mapping as second individual")
+        mutated = self._mutate(self.initial_char_to_token_mapping.copy())
+        population.append(mutated)
+
         # 残りをランダムに生成
-        print(f"  Generating {self.population_size - 1} random individuals...")
-        for i in range(self.population_size - 1):
+        print(f"  Generating {self.population_size - 2} random individuals...")
+        for i in range(self.population_size - 2):
             individual = {}
             for char in self.initial_char_to_token_mapping.keys():
                 individual[char] = random.randint(0, 9)
@@ -262,6 +281,7 @@ class UnigramWithGASolver:
 
             return hit_count
         except Exception as e:
+            traceback.print_exc()
             print(f"Error in fitness calculation: {e}")
             return 1000000
 
@@ -270,10 +290,13 @@ class UnigramWithGASolver:
     ) -> dict[str, str]:
         """指定されたマッピングで変換辞書を作成する"""
         # トークン化されたデータを読み込む
-        train_path, _ = get_train_valid_tsv_path(
-            char_to_token_mapping=char_to_token_mapping, unk_token_id=0
+        train_df, _ = get_train_valid_tsv_path(
+            char_to_token_mapping=char_to_token_mapping,
+            unk_token_id=0,
+            use_existing_tsv=True,
+            return_dataframe=True,
         )
-        tokenized_df = pd.read_csv(train_path, sep="\t")
+        tokenized_df = train_df
 
         conversion_dict = {}
         for sentence, tokenized_sentence in zip(
@@ -292,10 +315,13 @@ class UnigramWithGASolver:
         self, conversion_dict: dict[str, str], char_to_token_mapping: dict[str, int]
     ) -> int:
         """指定された変換辞書とマッピングでhit countを計算する"""
-        train_path, _ = get_train_valid_tsv_path(
-            char_to_token_mapping=char_to_token_mapping, unk_token_id=0
+        train_df, _ = get_train_valid_tsv_path(
+            char_to_token_mapping=char_to_token_mapping,
+            unk_token_id=0,
+            use_existing_tsv=True,
+            return_dataframe=True,
         )
-        tokenized_df = pd.read_csv(train_path, sep="\t")
+        tokenized_df = train_df
 
         hit_count = 0
         total_words = 0
@@ -399,10 +425,12 @@ class UnigramWithGASolver:
     def _load_train_data(self) -> pd.DataFrame:
         """訓練データを読み込む"""
         print("start reading train data...")
-        train_path, _ = get_train_valid_tsv_path(
-            char_to_token_mapping={}, unk_token_id=0
+        train_df, _ = get_train_valid_tsv_path(
+            char_to_token_mapping={},
+            unk_token_id=0,
+            use_existing_tsv=True,
+            return_dataframe=True,
         )
-        train_df = pd.read_csv(train_path, sep="\t")
         print("done reading train data.")
         return train_df
 
@@ -421,15 +449,18 @@ class UnigramWithGASolver:
     def _create_conversion_dict(self) -> dict[str, str]:
         """変換辞書を作成する"""
         # トークン化されたデータを読み込む
-        train_path, _ = get_train_valid_tsv_path(
-            char_to_token_mapping=self.char_to_token_mapping, unk_token_id=0
+        train_df, _ = get_train_valid_tsv_path(
+            char_to_token_mapping=self.char_to_token_mapping,
+            unk_token_id=0,
+            use_existing_tsv=True,
+            return_dataframe=True,
         )
-        tokenized_df = pd.read_csv(train_path, sep="\t")
+        tokenized_df = train_df
 
         conversion_dict = {}
         for sentence, tokenized_sentence in tqdm(
             zip(tokenized_df["text"], tokenized_df["tokenized_text"]),
-            desc="Creating conversion dict",
+            desc="Creating conversion dict (words)",
             total=len(tokenized_df),
         ):
             if not isinstance(sentence, str):
@@ -459,15 +490,18 @@ class UnigramWithGASolver:
 
     def _calculate_hit_count(self) -> int:
         """ヒット数を計算する"""
-        train_path, _ = get_train_valid_tsv_path(
-            char_to_token_mapping=self.char_to_token_mapping, unk_token_id=0
+        train_df, _ = get_train_valid_tsv_path(
+            char_to_token_mapping=self.char_to_token_mapping,
+            unk_token_id=0,
+            use_existing_tsv=True,
+            return_dataframe=True,
         )
-        tokenized_df = pd.read_csv(train_path, sep="\t")
+        tokenized_df = train_df
 
         hit_count = 0
         for sentence, tokenized_sentence in tqdm(
             zip(tokenized_df["text"], tokenized_df["tokenized_text"]),
-            desc="Calculating hit count",
+            desc="Calculating hit count (words)",
             total=len(tokenized_df),
         ):
             if not isinstance(sentence, str):
@@ -501,5 +535,5 @@ class UnigramWithGASolver:
 
 
 if __name__ == "__main__":
-    solver = UnigramWithGASolver(population_size=30, generations=50, mutation_rate=0.1)
+    solver = UnigramWithGASolver(population_size=15, generations=15, mutation_rate=0.1)
     solver.solve()
