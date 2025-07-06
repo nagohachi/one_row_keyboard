@@ -1,13 +1,17 @@
 from functools import partial
 from pathlib import Path
+import time
 
 import pandas as pd
 from datasets import load_dataset
 from datasets.dataset_dict import DatasetDict
+from pandarallel import pandarallel
 
 from constants.paths import INPUT_DIR
 
 token_id_set = {0, 1, 2, 3, 4, 5, 6, 7, 8, 9}
+
+pandarallel.initialize(nb_workers=16)
 
 
 def tokenize(
@@ -41,7 +45,9 @@ def batch_tokenize(
 def get_train_valid_tsv_path(
     char_to_token_mapping: dict[str, int],
     unk_token_id: int,
-) -> tuple[Path, Path]:
+    use_existing_tsv: bool = False,
+    return_dataframe: bool = False,
+) -> tuple:
     assert " " not in char_to_token_mapping, (
         "半角スペースはトークン化する必要はありません"
     )
@@ -52,35 +58,59 @@ def get_train_valid_tsv_path(
         f"unk_token_id は {token_id_set} の要素である必要があります"
     )
 
-    ds = load_dataset("taln-ls2n/kp20k", trust_remote_code=True)
-    assert isinstance(ds, DatasetDict)
-
-    train_dataset = ds["train"].map(
-        partial(
-            batch_tokenize,
-            char_to_token_mapping=char_to_token_mapping,
-            unk_token_id=unk_token_id,
-        ),
-        remove_columns=["title", "abstract", "keyphrases", "prmu"],
-        batched=True,
-    )
-
-    valid_dataset = ds["validation"].map(
-        partial(
-            batch_tokenize,
-            char_to_token_mapping=char_to_token_mapping,
-            unk_token_id=unk_token_id,
-        ),
-        remove_columns=["title", "abstract", "keyphrases", "prmu"],
-        batched=True,
-    )
-
     train_tsv_path = INPUT_DIR / "train.tsv"
     valid_tsv_path = INPUT_DIR / "valid.tsv"
 
-    train_dataset.to_pandas().to_csv(train_tsv_path, sep="\t", index=False)  # type: ignore
-    valid_dataset.to_pandas().to_csv(valid_tsv_path, sep="\t", index=False)  # type: ignore
+    def tokenize(text):
+        if not isinstance(text, str):
+            return ""
+        tokenized_text = ""
+        for c in text:
+            if c == " ":
+                tokenized_text += " "
+            elif c not in char_to_token_mapping:
+                tokenized_text += str(unk_token_id)
+            else:
+                tokenized_text += str(char_to_token_mapping[c])
+        return tokenized_text
 
+    if use_existing_tsv:
+        train_df = pd.read_csv(train_tsv_path, sep="\t")
+        valid_df = pd.read_csv(valid_tsv_path, sep="\t")
+        start_time = time.time()
+        train_df["tokenized_text"] = train_df["text"].parallel_apply(tokenize)
+        valid_df["tokenized_text"] = valid_df["text"].parallel_apply(tokenize)
+        end_time = time.time()
+        print(f"tokenize time: {end_time - start_time:.2f} seconds")
+        train_df[["id", "text", "tokenized_text"]].to_csv(
+            train_tsv_path, sep="\t", index=False
+        )
+        valid_df[["id", "text", "tokenized_text"]].to_csv(
+            valid_tsv_path, sep="\t", index=False
+        )
+        if return_dataframe:
+            return train_df, valid_df
+        return train_tsv_path, valid_tsv_path
+
+    ds = load_dataset("taln-ls2n/kp20k", trust_remote_code=True)
+    assert isinstance(ds, DatasetDict)
+
+    train_pd = ds["train"].to_pandas()
+    valid_pd = ds["validation"].to_pandas()
+    train_df = train_pd if isinstance(train_pd, pd.DataFrame) else list(train_pd)[0]
+    valid_df = valid_pd if isinstance(valid_pd, pd.DataFrame) else list(valid_pd)[0]
+    train_df["tokenized_text"] = train_df["abstract"].parallel_apply(tokenize)
+    valid_df["tokenized_text"] = valid_df["abstract"].parallel_apply(tokenize)
+    train_df = train_df.rename(columns={"abstract": "text"})
+    valid_df = valid_df.rename(columns={"abstract": "text"})
+    train_df[["id", "text", "tokenized_text"]].to_csv(
+        train_tsv_path, sep="\t", index=False
+    )
+    valid_df[["id", "text", "tokenized_text"]].to_csv(
+        valid_tsv_path, sep="\t", index=False
+    )
+    if return_dataframe:
+        return train_df, valid_df
     return train_tsv_path, valid_tsv_path
 
 
